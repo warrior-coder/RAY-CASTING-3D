@@ -18,9 +18,9 @@ typedef struct
 }RGB4;
 typedef struct
 {
-    double x;
-    double y;
-    double angle;
+    float x;
+    float y;
+    float angle;
 }PLAYER;
 typedef struct
 {
@@ -36,11 +36,11 @@ int num_borders = 0;
 
 char keyCode = -1;
 
-double FOV = 1.0472;
+float FOV = 1.0472;
 int NUM_RAYS = 100;
 int MAX_DEPTH = 400;
 
-double camera_z = NUM_RAYS / 2 / tan(FOV / 2);
+float camera_z = NUM_RAYS / 2 / tan(FOV / 2);
 
 // Global funclions
 bool is_outside(int x, int y)
@@ -52,11 +52,9 @@ bool is_outside(int x, int y)
             return false;
         }
     }
-
     if (x < 0 || y < 0 || x >= 500 || y >= 500)
     {
         return false;
-
     }
     return true;
 }
@@ -74,7 +72,11 @@ void read_map_from_file(const char* fname)
         for (i = j = 0; (chr = getc(fp)) != EOF; j++)
         {
             if (chr == '#') num_borders++;
-            else if (chr == 'p') player = { (j + 0.5) * 50, (i + 0.5) * 50 };
+            else if (chr == 'p')
+            {
+                player.x = (j + 0.5) * 50;
+                player.y = (i + 0.5) * 50;
+            }
             else if (chr == '\n') { j = -1; i++; }
         }
 
@@ -204,12 +206,13 @@ int main()
     MSG msg = {};
 
     // Game part
-    read_map_from_file("map.txt");
+    read_map_from_file("map2.txt");
 
     FRAME frame(windowWidth, windowHeight, hwnd);
 
-    double rx, ry, dx, dy, sin_a, cos_a, wall_h;
-    int wall_x;
+    float dx, dy, sin_a, cos_a, wall_h;
+    int rx, ry, wall_x, depth;
+    float d, angle;
     BYTE col;
 
     // -+-+-+-+-+-+-+-+-+-+- MAIL LOOP -+-+-+-+-+-+-+-+-+-+-
@@ -251,45 +254,42 @@ int main()
             else if (keyCode == 39) player.angle += FOV / 50;
 
             // Draw background
-            frame.clear({});
+            frame.pen_color = { 90,176,254 };
+            frame.set_rect(0, 0, 500, 250);
 
-            for (double y = 0; y < 250; y++)
-            {
-                col = BYTE((y / 250) * (y / 250) * 180 + 20);
-                frame.pen_color = { col, col, col };
+            frame.pen_color = { 37,37,37 };
+            frame.set_rect(0, 250, 500, 500);
 
-                for (int x = 0; x < 500; x++)
-                {
-                    frame.set_pixel(x, y + 280);
-                }
-            }
-
+            frame.pen_color = { 0,0,0 };
+            wall_h = int(250 * camera_z / MAX_DEPTH / 2);
+            frame.set_rect(0, 250 - wall_h, 500, 250 + wall_h);
+            
             // Cast walls
-            wall_x = 0;
-            for (double angle = -FOV / 2; angle <= FOV / 2; angle += FOV / NUM_RAYS)
+            for (angle = -FOV / 2, wall_x = 0; angle <= FOV / 2; angle += FOV / NUM_RAYS, wall_x += 5)
             {
                 sin_a = sin(player.angle + angle);
                 cos_a = cos(player.angle + angle);
 
-                for (double depth = 0; depth < MAX_DEPTH; depth++)
+                for (depth = 0; depth < MAX_DEPTH; depth++)
                 {
-                    rx = player.x + cos_a * depth;
-                    ry = player.y + sin_a * depth;
+                    rx = int(player.x + cos_a * depth);
+                    ry = int(player.y + sin_a * depth);
 
-                    if (!is_outside(rx, ry))
+                    if (rx % 50 == 0 || ry % 50 == 0)
                     {
-                        depth *= cos(angle);
-                        col = BYTE((1 - depth / MAX_DEPTH) * (1 - depth / MAX_DEPTH) * 220);
-                        frame.pen_color = { col, col, col };
-                        wall_h = 250 * camera_z / depth;
+                        if (!is_outside(rx, ry))
+                        {
+                            d = depth * cos(angle);
+                            col = BYTE((1 - d / MAX_DEPTH) * (1 - d / MAX_DEPTH) * 255);
+                            frame.pen_color = { col, BYTE(col/20.*11), 0 };
+                            wall_h = 250 * camera_z / d / 2;
 
-                        frame.set_rect(wall_x, 250 - int(wall_h / 2), wall_x + 4, 250 + int(wall_h / 2));
+                            frame.set_rect(wall_x, 250 - wall_h, wall_x + 4, 250 + wall_h);
 
-                        break;
+                            break;
+                        }
                     }
                 }
-
-                wall_x += 5;
             }
 
             // Print buffer
